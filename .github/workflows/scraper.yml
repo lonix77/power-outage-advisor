@@ -48,7 +48,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           SEARCH_AREAS: ${{ secrets.SEARCH_AREAS }}
         run: |
-          python check_maintenance.py "$SEARCH_AREAS" --telegram --silent --bot-token "$TELEGRAM_BOT_TOKEN" --chat-id "$TELEGRAM_CHAT_ID" || true
+          python check_maintenance.py "$SEARCH_AREAS" --telegram --silent --notify-always --bot-token "$TELEGRAM_BOT_TOKEN" --chat-id "$TELEGRAM_CHAT_ID" || true
 
       - name: Save Scraper Cache
         uses: actions/cache/save@v4
