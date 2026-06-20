@@ -6,11 +6,13 @@ A serverless automated system utilizing **GitHub Actions** to scrape and monitor
 Checks Meralco's **Planned Maintenance** schedule.
 * Matches areas.
 * Caches results using GitHub Actions Cache (`actions/cache`) across runs.
+* Runs automatically **every 48 hours**.
 
 ## 2. Urgent Alert Checker (`check_alerts.py`)
 Checks Meralco's **Alerts Page** for active Red/Yellow grid alerts and immediate Rotational Brownouts.
 * Extracts time windows even with complex nested DOM trees.
 * Caches results using GitHub Actions Cache (`actions/cache`) across runs.
+* Runs automatically **every 12 hours**.
 
 ## Serverless Deployment via GitHub Actions
 Since you've moved to GitHub workflows, no VM setup is required.
@@ -21,5 +23,5 @@ Since you've moved to GitHub workflows, no VM setup is required.
    * `TELEGRAM_BOT_TOKEN`: The bot token from @BotFather.
    * `TELEGRAM_CHAT_ID`: Your chat ID from @userinfobot.
    * `SEARCH_AREAS`: A comma-separated list of your areas (e.g., `"Taguig,QC"`). Note the quotes if they have spaces.
-4. The workflow in `.github/workflows/scraper.yml` automatically executes every 2 hours via cron.
-5. Click **Actions > "Meralco Outage and Alert Checker" > Run workflow** to test it immediately.
+4. The isolated workflows in `.github/workflows/` automatically execute based on their own separate cron schedules.
+5. Click **Actions** to view the divided workflows and test them manually via **Run workflow**.

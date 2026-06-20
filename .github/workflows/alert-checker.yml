@@ -1,0 +1,48 @@
+name: Meralco Urgent Alert Checker
+
+on:
+  schedule:
+    - cron: '0 */12 * * *' # Every 12 hours
+  workflow_dispatch:
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Restore Scraper Cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .meralco_alerts_cache.json
+          key: alerts-cache-${{ github.run_id }}
+          restore-keys: |
+            alerts-cache-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install chromium
+
+      - name: Run Urgent Alert Checker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SEARCH_AREAS: ${{ secrets.SEARCH_AREAS }}
+        run: |
+          python check_alerts.py "$SEARCH_AREAS" --telegram --silent --bot-token "$TELEGRAM_BOT_TOKEN" --chat-id "$TELEGRAM_CHAT_ID" || true
+
+      - name: Save Scraper Cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .meralco_alerts_cache.json
+          key: alerts-cache-${{ github.run_id }}
