@@ -1,41 +1,25 @@
 # Meralco Outage & Alert Checker
 
-A unified automated system holding two utilities to scrape and monitor Meralco's outage pages and send notifications via Telegram. It supports scraping React/Next.js dynamic HTML using Playwright.
+A serverless automated system utilizing **GitHub Actions** to scrape and monitor Meralco's outage pages and send notifications via Telegram. Supports scraping React/Next.js dynamic HTML using Playwright.
 
 ## 1. Maintenance Checker (`check_maintenance.py`)
-Checks Meralco's **Planned Maintenance** schedule (twice daily is recommended).
-* Caches results in `.meralco_advisories_cache.json`
-* Emits a message showing planned maintenance timeframes for your matched areas.
+Checks Meralco's **Planned Maintenance** schedule.
+* Matches areas.
+* Caches results using GitHub Actions Cache (`actions/cache`) across runs.
 
 ## 2. Urgent Alert Checker (`check_alerts.py`)
-Checks Meralco's **Alerts Page** for active Red/Yellow grid alerts and immediate Rotational Brownouts (checking every 1-2 hours is recommended).
+Checks Meralco's **Alerts Page** for active Red/Yellow grid alerts and immediate Rotational Brownouts.
 * Extracts time windows even with complex nested DOM trees.
-* Caches results in `.meralco_alerts_cache.json`
+* Caches results using GitHub Actions Cache (`actions/cache`) across runs.
 
-## Requirements
-* Python 3
-* Playwright
-* BeautifulSoup4
+## Serverless Deployment via GitHub Actions
+Since you've moved to GitHub workflows, no VM setup is required.
 
-## Setup
-1. Run `./setup_ubuntu.sh` to install system packages, create virtual environment, and install dependencies.
-2. Run `source venv/bin/activate` followed by `playwright install chromium`
-3. Copy `config.env.example` to `config.env` and populate `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `SEARCH_AREAS`.
-
-## Usage
-* You can test them directly:
-  `python3 check_maintenance.py "Taguig,Makati" --telegram --bot-token "..." --chat-id "..."`
-  `python3 check_alerts.py "Taguig,Makati" --telegram --bot-token "..." --chat-id "..."`
-
-* Or use the wrappers loaded with `config.env` values:
-  `./run_maintenance.sh`
-  `./run_alerts.sh`
-
-## Cron Examples (Add via `crontab -e`)
-```bash
-# Check planned maintenance at 8:00 AM and 6:00 PM
-0 8,18 * * * /path/to/mer-outage/run_maintenance.sh >> /path/to/mer-outage/run_maintenance.log 2>&1
-
-# Check urgent alerts every 2 hours from 9 AM to 11 PM
-0 9-23/2 * * * /path/to/mer-outage/run_alerts.sh >> /path/to/mer-outage/run_alerts.log 2>&1
-```
+1. Go to your repository on GitHub.
+2. Navigate to **Settings > Secrets and variables > Actions**.
+3. Create three **New repository secrets**:
+   * `TELEGRAM_BOT_TOKEN`: The bot token from @BotFather.
+   * `TELEGRAM_CHAT_ID`: Your chat ID from @userinfobot.
+   * `SEARCH_AREAS`: A comma-separated list of your areas (e.g., `"Taguig,QC"`). Note the quotes if they have spaces.
+4. The workflow in `.github/workflows/scraper.yml` automatically executes every 2 hours via cron.
+5. Click **Actions > "Meralco Outage and Alert Checker" > Run workflow** to test it immediately.
