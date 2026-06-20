@@ -25,18 +25,17 @@ To use this script, you will need to provision Telegram API credentials:
 2. **Telegram Chat ID**: Message `@userinfobot` on Telegram from your personal account to get your ID. This tells the script where to send the alerts.
 3. **Search Areas**: You need to define a comma-separated list of target cities, municipalities, or barangays you wish to monitor.
 
-## How to Deploy (Fork & Run)
+## How to Deploy
 
-This project requires zero infrastructure and is tailored to run perfectly on GitHub's free tier. 
+Since this is a private repository, only authorized collaborators can manage deployments. The project requires zero infrastructure and runs perfectly on GitHub Actions using the private account's compute minutes. 
 
-1. **Fork this repository** to your own GitHub account.
-2. In your forked repository, navigate to **Settings** > **Secrets and variables** > **Actions**.
-3. Create the following three **New repository secrets**:
+1. Navigate to the repository's **Settings** > **Secrets and variables** > **Actions**.
+2. Create the following three **New repository secrets**:
    * `TELEGRAM_BOT_TOKEN` (e.g., `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`)
    * `TELEGRAM_CHAT_ID` (e.g., `123456789`)
    * `SEARCH_AREAS` (e.g., `"Makati,Taguig"`. *Note: Wrap the entire string in quotes if some names contain spaces.*)
-4. Go to the **Actions** tab in your repository. GitHub disables workflows on forked repositories by default. Click **"I understand my workflows, go ahead and enable them"**.
-5. To test the integration immediately, select either workflow on the left sidebar and click **Run workflow**.
+3. Go to the **Actions** tab in this repository. Ensure that workflows are enabled.
+4. To test the integration immediately, select either workflow on the left sidebar and click **Run workflow**.
 
 ## Modifying Schedules
 Schedules are defined via standard cron syntax. You can edit the intervals at any point by modifying `.github/workflows/alert-checker.yml` and `.github/workflows/maintenance-checker.yml` directly in your repository.
