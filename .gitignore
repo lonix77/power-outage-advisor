@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# Secrets and config
+config.env
+*.env
+!config.env.example
+
+# Logs
+logs/
+*.log
+
+# Playwright
+.ms-playwright/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scraper caches
+.meralco_*_cache.json
