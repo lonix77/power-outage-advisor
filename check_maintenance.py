@@ -41,21 +41,91 @@ def save_advisory_history(data):
         print(f"⚠️ Warning: Could not save advisory history: {e}")
 
 
-def extract_event_date(title):
-    """Extract the first event date from advisory title. Returns datetime object or None."""
-    date_match = re.match(r'(\w+ \d+(?:\s*–\s*\d+)?,\s*\d{4})', title)
-    if date_match:
+def parse_event_range(title):
+    """
+    Parse the event date(s) from an advisory title.
+
+    Returns (start_date, end_date) as datetime objects, or (None, None) if the
+    title cannot be parsed.
+
+    Handles single dates and ranges written with EITHER a hyphen-minus '-'
+    (U+002D, what Meralco actually uses) OR an en-dash '–' (U+2013), including
+    cross-month ranges:
+        'July 26, 2026'          -> (Jul 26, Jul 26)
+        'July 23 - 24, 2026'     -> (Jul 23, Jul 24)
+        'June 30 - July 1, 2026' -> (Jun 30, Jul 1)
+    """
+    if not title:
+        return (None, None)
+
+    # Normalize any dash variant to a plain hyphen so one code path handles all.
+    norm = title.replace('\u2013', '-').replace('\u2014', '-')
+
+    # Match the leading date expression up to and including the 4-digit year.
+    m = re.match(
+        r'\s*([A-Za-z]+\s+\d{1,2}(?:\s*-\s*(?:[A-Za-z]+\s+)?\d{1,2})?\s*,\s*\d{4})',
+        norm,
+    )
+    if not m:
+        return (None, None)
+
+    expr = m.group(1)
+    year_match = re.search(r'(\d{4})', expr)
+    if not year_match:
+        return (None, None)
+    year = int(year_match.group(1))
+
+    core = expr.rsplit(',', 1)[0].strip()  # drop the ", YYYY" suffix
+
+    if '-' in core:
+        left, right = [part.strip() for part in core.split('-', 1)]
+    else:
+        left = right = core
+
+    try:
+        start = datetime.strptime(f"{left} {year}", "%B %d %Y")
+    except ValueError:
+        return (None, None)
+
+    # The end side may be a bare day ("24") or a full "Month day" ("July 1").
+    try:
+        if re.match(r'^[A-Za-z]', right):
+            end = datetime.strptime(f"{right} {year}", "%B %d %Y")
+        else:
+            end = datetime.strptime(f"{start.strftime('%B')} {right} {year}", "%B %d %Y")
+    except ValueError:
+        end = start
+
+    # Year-spanning ranges (e.g. 'December 31 - January 1').
+    if end < start:
         try:
-            full_date = date_match.group(1)
-            year_match = re.search(r'(\d{4})', full_date)
-            year = year_match.group(1) if year_match else ''
-            date_part = full_date.split('–')[0].strip()
-            if ',' not in date_part:
-                date_part = f"{date_part}, {year}"
-            return datetime.strptime(date_part, '%B %d, %Y')
-        except:
+            end = end.replace(year=year + 1)
+        except ValueError:
             pass
-    return None
+
+    return (start, end)
+
+
+def extract_event_date(title):
+    """Extract the START event date from an advisory title. Returns datetime or None."""
+    start, _ = parse_event_range(title)
+    return start
+
+
+def is_outdated(title, today=None):
+    """
+    True if the advisory's event has FULLY passed (its end date is before today).
+
+    A range like 'July 17 - 18' is still relevant on July 18. Unparseable dates
+    are treated as NOT outdated so we never silently drop an advisory we failed
+    to understand.
+    """
+    if today is None:
+        today = datetime.now().date()
+    _, end = parse_event_range(title)
+    if end is None:
+        return False
+    return end.date() < today
 
 
 def categorize_advisories(current_matches, previous_data, area):
@@ -82,21 +152,20 @@ def categorize_advisories(current_matches, previous_data, area):
     
     for match in current_matches:
         title = match['title']
-        event_date = extract_event_date(title)
-        
+        start, end = parse_event_range(title)
+
         if title not in previous_titles:
             # This is a NEW advisory
             categories['new'].append(match)
         else:
             # This is a SAME (previously seen) advisory
-            if event_date:
-                event_date_only = event_date.date()
-                if event_date_only == today:
-                    categories['same_today'].append(match)
-                elif event_date_only > today:
-                    categories['same_future'].append(match)
-                else:
+            if start and end:
+                if end.date() < today:
                     categories['same_past'].append(match)
+                elif start.date() <= today <= end.date():
+                    categories['same_today'].append(match)
+                else:
+                    categories['same_future'].append(match)
             else:
                 # Can't determine date, treat as same-future to be safe
                 categories['same_future'].append(match)
@@ -170,7 +239,7 @@ def check_maint(search_keywords, send_telegram=False, bot_token=None, chat_id=No
             max_safety_clicks = 100
             no_change_count = 0
             seen_titles = set()
-            old_date_count = 0
+            today_date = datetime.now().date()
             
             while clicks < max_safety_clicks:
                 # Get all current advisory titles BEFORE clicking
@@ -230,34 +299,29 @@ def check_maint(search_keywords, send_telegram=False, bot_token=None, chat_id=No
                                 no_change_count = 0
                                 seen_titles.update(new_unique)
                                 
-                                # Check: are new items past events?
-                                old_items_in_batch = 0
-                                for title in list(new_unique)[:5]:
-                                    date_match = re.match(r'(\w+ \d+(?:\s*–\s*\d+)?,\s*\d{4})', title)
-                                    if date_match:
-                                        try:
-                                            full_date = date_match.group(1)
-                                            year_match = re.search(r'(\d{4})', full_date)
-                                            year = year_match.group(1) if year_match else ''
-                                            date_part = full_date.split('–')[0].strip()
-                                            if ',' not in date_part:
-                                                date_part = f"{date_part}, {year}"
-                                            date_obj = datetime.strptime(date_part, '%B %d, %Y')
-                                            days_old = (datetime.now() - date_obj).days
-                                            if days_old >= 1:
-                                                old_items_in_batch += 1
-                                        except:
-                                            pass
-                                
-                                if old_items_in_batch >= 3:
+                                # The list is ordered newest-event-first, and
+                                # only ~2 items load per click. Once a whole
+                                # freshly-loaded batch is made up of events that
+                                # have fully passed, everything further down is
+                                # older still, so it is safe to stop paging.
+                                # The list is ordered newest-event-first (by
+                                # START date, descending). Only ~2 items load
+                                # per click. A short range can still END today
+                                # even after a same-day past item appears (e.g.
+                                # "July 17 - 18" when today is the 18th), so we
+                                # must NOT stop the moment we see a past event.
+                                # Only once a whole batch STARTS well before
+                                # today (beyond the longest plausible range) can
+                                # nothing below still be current -> safe to stop.
+                                STOP_BUFFER_DAYS = 5
+                                starts = [parse_event_range(t)[0] for t in new_unique]
+                                all_parsed = bool(starts) and all(s is not None for s in starts)
+                                past_cutoff = today_date - timedelta(days=STOP_BUFFER_DAYS)
+                                if all_parsed and max(s.date() for s in starts) < past_cutoff:
                                     if not silent:
-                                        print(f"      ℹ️ Getting past events (1+ days old)")
-                                    old_date_count += 1
-                                    if old_date_count >= 1:
-                                        if not silent:
-                                            print(f"   🛑 STOPPING: Reached past events (only showing today/future)")
-                                        button_found = False
-                                        break
+                                        print(f"   🛑 STOPPING: Loaded events starting before {past_cutoff} (only today/future kept)")
+                                    button_found = False
+                                    break
                             
                             break
                     except:
@@ -297,24 +361,11 @@ def check_maint(search_keywords, send_telegram=False, bot_token=None, chat_id=No
                 # Check against all search keywords
                 for search_keyword in search_keywords:
                     if search_keyword.lower() in text.lower():
-                        # Filter out past events - only show today or future dates
-                        date_match = re.match(r'(\w+ \d+(?:\s*–\s*\d+)?,\s*\d{4})', text)
-                        if date_match:
-                            try:
-                                full_date = date_match.group(1)
-                                year_match = re.search(r'(\d{4})', full_date)
-                                year = year_match.group(1) if year_match else ''
-                                date_part = full_date.split('–')[0].strip()
-                                if ',' not in date_part:
-                                    date_part = f"{date_part}, {year}"
-                                date_obj = datetime.strptime(date_part, '%B %d, %Y')
-                                days_old = (datetime.now() - date_obj).days
-                                
-                                # Skip past events (only show today or future)
-                                if days_old >= 1:
-                                    continue
-                            except:
-                                pass  # If date parsing fails, show the item anyway
+                        # Skip outdated advisories (event already fully passed).
+                        # Today's and future events are kept; titles whose date
+                        # cannot be parsed are kept rather than silently dropped.
+                        if is_outdated(text):
+                            continue
                         
                         relative_link = link_tag.get('href')
                         full_link = urljoin(base_url, relative_link)
